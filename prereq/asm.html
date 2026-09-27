@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RISC-V 汇编最小集</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">← 预备知识</a><span>主线用到：Lab0 动手 1，Lab1 §1–3</span></nav>
+<h1>RISC-V 汇编最小集</h1>
+<p class="lead">不用会写汇编程序，只要能读懂 Lab1 里那十几行，和反汇编出来的简单函数。这一页先读<a href="memory.html">内存与地址</a>。</p>
+
+<h2 id="cpu">1. CPU 一直在做的事</h2>
+<p>CPU 里有一个特殊的寄存器 <code>pc</code>（程序计数器），存着“下一条指令的地址”。CPU 反复做三步：从 <code>pc</code> 指的地址取一条指令，执行它，<code>pc</code> 指向下一条（RISC-V 指令大多 4 字节，所以通常是加 4）。跳转指令就是直接改 <code>pc</code>。</p>
+<p>汇编就是这些指令的文字写法，一行一条。编译器把 C 翻译成汇编，汇编器再把汇编翻译成机器码（真正存在内存里的那些字节）。</p>
+
+<h2 id="reg">2. 寄存器</h2>
+<p><b>寄存器</b>是 CPU 内部的几十个小存储格，每个 64 位，读写比内存快得多。CPU 做运算只能在寄存器之间做，内存里的数要先<b>加载</b>到寄存器，算完再<b>存</b>回去。</p>
+<p>RISC-V 有 32 个通用寄存器，编号 <code>x0</code>–<code>x31</code>。为了好记，每个都有一个按用途起的名字，反汇编里看到的是这些名字：</p>
+<table>
+<tr><th>名字</th><th>用途</th></tr>
+<tr><td><code>zero</code></td><td>永远是 0，写进去也没用</td></tr>
+<tr><td><code>ra</code></td><td>返回地址：函数执行完该回到哪</td></tr>
+<tr><td><code>sp</code></td><td>栈指针，见第 5 节</td></tr>
+<tr><td><code>tp</code></td><td>线程指针。我们的内核拿它存“我是几号 CPU”</td></tr>
+<tr><td><code>a0</code>–<code>a7</code></td><td>函数参数；<code>a0</code> 也放返回值</td></tr>
+<tr><td><code>t0</code>–<code>t6</code></td><td>临时用，调别的函数后可能被改掉</td></tr>
+<tr><td><code>s0</code>–<code>s11</code></td><td>要保留的值，被调用的函数用之前得先存起来、用完还原</td></tr>
+</table>
+<p>另外还有一类 <b>CSR</b>（控制与状态寄存器），比如 <code>mhartid</code>、<code>mstatus</code>，控制 CPU 自己的行为，只能用专门的指令读写，见<a href="trap.html">特权级与异常</a>。</p>
+
+<h2 id="format">3. 指令的格式</h2>
+<p>绝大多数指令长这样：<b>操作名 目标, 源1, 源2</b>，结果写进第一个寄存器。<code>#</code> 后面是注释。</p>
+<pre>add  a0, a1, a2     <span class="c"># a0 = a1 + a2</span>
+addi a1, a1, 1      <span class="c"># a1 = a1 + 1        i 表示第二个源是立即数（直接写在指令里的数）</span>
+mul  a0, a0, a1     <span class="c"># a0 = a0 * a1</span></pre>
+
+<h2 id="list">4. Lab1 用到的指令</h2>
+<table>
+<tr><th>指令</th><th>意思</th></tr>
+<tr><td><code>li a0, 4096</code></td><td>load immediate：a0 = 4096</td></tr>
+<tr><td><code>la sp, CPU_stack</code></td><td>load address：sp = 符号 CPU_stack 的地址</td></tr>
+<tr><td><code>mv a5, a0</code></td><td>a5 = a0</td></tr>
+<tr><td><code>add</code> / <code>addi</code> / <code>mul</code> / <code>slli</code></td><td>加、加立即数、乘、左移（<code>slli a1,a1,2</code> 就是 a1 = a1 &lt;&lt; 2）</td></tr>
+<tr><td><code>lw a4, 0(a5)</code></td><td>load word：从地址 a5+0 读 4 字节到 a4</td></tr>
+<tr><td><code>sw a5, 0(a4)</code></td><td>store word：把 a5 的 4 字节写到地址 a4+0</td></tr>
+<tr><td><code>ld</code> / <code>sd</code></td><td>同上，但读写 8 字节（d 是 double word）</td></tr>
+<tr><td><code>beq</code> / <code>bne</code> / <code>blez</code></td><td>条件跳转：相等 / 不相等 / 小于等于 0 就跳</td></tr>
+<tr><td><code>j spin</code></td><td>无条件跳到标号 spin</td></tr>
+<tr><td><code>call start</code></td><td>调用函数：ra = 下一条指令的地址，然后跳到 start</td></tr>
+<tr><td><code>ret</code></td><td>返回：跳到 ra</td></tr>
+<tr><td><code>csrr a1, mhartid</code></td><td>读 CSR：a1 = mhartid</td></tr>
+<tr><td><code>csrw mepc, a0</code></td><td>写 CSR：mepc = a0</td></tr>
+</table>
+<p><code>40(sp)</code> 这种写法的意思是“地址 sp + 40”。括号里是基址寄存器，前面是偏移。所以 <code>sd ra, 40(sp)</code> 就是“把 ra 存到 sp+40 处”。</p>
+<p>反汇编里还会看到几个“组合”：<code>call</code> 实际被拆成 <code>auipc ra, ...</code> + <code>jalr ra</code> 两条（先算出目标地址的高位，再跳），<code>ret</code> 实际是 <code>jalr zero, 0(ra)</code>。看到它们按 call 和 ret 理解就行。</p>
+
+<h3 id="label">标号、符号和伪指令</h3>
+<pre>.section .text      <span class="c"># 以 . 开头的是给汇编器的命令：下面的内容放进 .text 段</span>
+.global _entry      <span class="c"># 让 _entry 这个名字在别的文件里也能看到</span>
+_entry:             <span class="c"># 标号：给下一条指令的地址起个名字</span>
+        la sp, CPU_stack
+spin:
+        j spin      <span class="c"># 跳回自己：原地死循环</span></pre>
+<p>标号和 C 里的函数名、全局变量名一样，都叫<b>符号</b>：一个名字对应一个地址，链接器负责把名字换成真正的地址。所以汇编里的 <code>CPU_stack</code> 能拿到 C 文件里定义的数组，C 里的 <code>start</code> 也能被汇编 <code>call</code> 到。</p>
+
+<h2 id="stack">5. 栈与函数调用</h2>
+<p>函数调用有个麻烦：<code>ra</code> 只有一个。<code>caller</code> 调 <code>leaf</code> 时，<code>call</code> 会把 ra 改成“回到 caller”，那 caller 自己该回哪的地址就丢了。所以 caller 调别人之前，要把 ra 和其他要保留的寄存器存到内存里，回来后再读出来。</p>
+<p>存这些东西的内存区域叫<b>栈</b>。<code>sp</code> 指向栈顶。RISC-V 的栈<b>向低地址增长</b>：函数一开始 <code>addi sp, sp, -48</code>，给自己腾出 48 字节；结束前 <code>addi sp, sp, 48</code> 还回去。局部变量放不下寄存器时，也放在这 48 字节里。</p>
+<pre>caller:
+    addi sp, sp, -16    <span class="c"># 开空间</span>
+    sd   ra, 8(sp)      <span class="c"># 存 ra</span>
+    call leaf           <span class="c"># ra 被改掉了，没关系</span>
+    ld   ra, 8(sp)      <span class="c"># 取回 ra</span>
+    addi sp, sp, 16     <span class="c"># 还空间</span>
+    ret                 <span class="c"># 回到调用 caller 的地方</span></pre>
+<p>每调一层就往下开一块，返回时收回，像一摞盘子。这就是 Lab1 里“没设 sp 就不能进 C”的原因：sp 是乱的，第一条 <code>sd</code> 就会写到不知道哪去。</p>
+
+<div class="ex">
+<h4>动手：对照 C 读汇编</h4>
+<pre>cd prereq/examples
+make asm      <span class="c"># 需要 RISC-V 交叉编译器，安装见 Lab0 §2</span></pre>
+<p><code>twice(x)</code> 是 <code>x*2+1</code>：参数在 a0，<code>slli a0,a0,0x1</code> 左移一位就是乘 2，<code>addiw</code> 加 1，结果留在 a0，<code>ret</code>。编译器把乘法换成了更快的移位。</p>
+<p><code>sum(a, n)</code>：a 在 a0、n 在 a1。<code>blez a1</code> 处理 n ≤ 0；<code>.L3</code> 是循环体：<code>lw</code> 读一个元素、<code>addw</code> 累加、<code>addi a5,a5,4</code> 指针后移 4 字节、<code>bne</code> 没到头就跳回去。这两个函数都不调别人，所以没碰栈。</p>
+</div>
+
+<footer class="pager"><a href="bits.html">← 位运算</a><a href="trap.html">特权级与异常 →</a></footer>
+</main>
+</body>
+</html>

@@ -67,6 +67,8 @@ pre .c { color: var(--muted); }
 .box > :first-child { margin-top: 0.3em; }
 .box > :last-child { margin-bottom: 0.3em; }
 .box .label { font-weight: 600; display: block; }
+.box.pre { border-left-color: var(--link); background: var(--card); }
+.box.pre .label::before { content: "预备 · "; color: var(--link); }
 
 table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.95rem; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }

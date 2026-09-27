@@ -21,6 +21,13 @@ for stage in [0-9][0-9]-*/; do
     fi
 done
 
+# 预备知识：多个页面加一份示例
+mkdir -p dist/prereq
+cp prereq/*.html dist/prereq/
+cp -r prereq/examples dist/prereq/
+(cd dist && zip -qr downloads/prereq.zip prereq/examples)
+
 # 构建产物不该出现在站点里
-find dist \( -name '*.o' -o -name test -o -name race -o -name demo -o -name bits \) -type f -delete
+find dist \( -name '*.o' -o -name test -o -name race -o -name demo -o -name bits \
+    -o -name memory -o -name pointer \) -type f -delete
 echo "dist/ 已生成：$(find dist -type f | wc -l) 个文件"

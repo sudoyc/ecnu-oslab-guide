@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>指针与结构体</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">← 预备知识</a><span>主线用到：Lab1 §5–6，之后每个 lab</span></nav>
+<h1>指针、结构体与 volatile</h1>
+<p class="lead">内核代码几乎都在传地址：锁传地址、设备寄存器用地址访问、页表里存的也是地址。这一页先读<a href="memory.html">内存与地址</a>。</p>
+
+<h2 id="pointer">1. 指针就是存地址的变量</h2>
+<pre>int n = 10;
+int *p = &amp;n;     <span class="c">// &amp;n：取 n 的地址。p 的类型是 int *，“指向 int 的指针”</span>
+*p = 11;         <span class="c">// *p：去 p 存的地址那里，把那个 int 改成 11。现在 n == 11</span></pre>
+<ul>
+<li><code>&amp;变量</code>：取地址。</li>
+<li><code>*指针</code>：顺着地址找到那个变量，可以读也可以写。这叫<b>解引用</b>。</li>
+<li>声明里的 <code>*</code>（<code>int *p</code>）只是说“p 是指针”，和解引用是两回事，只是长得一样。</li>
+</ul>
+<p>指针自己也是变量，占 8 字节，里面存的就是一个地址数字。<code>char *s</code> 指向一个字符，C 的字符串就是“从这个地址开始，一直到 <code>'\0'</code> 为止的字节”，所以函数收字符串参数都写 <code>char *</code>。</p>
+
+<h2 id="why">2. 为什么要传地址</h2>
+<p>C 调函数时，参数是<b>复制</b>一份传进去的。函数改的是复制品，调用者的变量不变。想让函数改到调用者的变量，就把变量的地址传进去：</p>
+<pre>void add_one(int *p) { *p = *p + 1; }
+add_one(&amp;n);     <span class="c">// n 真的加了 1</span></pre>
+<p>锁就是这样用的：<code>spinlock_acquire(&amp;lk)</code> 传的是锁的地址，所有 CPU 操作的是内存里同一把锁，而不是各自的复制品。</p>
+
+<h2 id="array">3. 指针和数组</h2>
+<p>数组名在大多数地方会变成首元素的地址。<code>p + 1</code> 不是地址加 1，而是加一个元素的大小：<code>int *</code> 加 1，地址加 4。所以 <code>p[i]</code> 和 <code>*(p + i)</code> 完全一样。</p>
+
+<h2 id="struct">4. 结构体与 -&gt;</h2>
+<p>结构体把几个变量打包成一个类型。课程框架里的自旋锁（<code>src/kernel/lock/type.h</code>）：</p>
+<pre>typedef struct spinlock {
+    int locked;    <span class="c">// 是否上锁</span>
+    char *name;    <span class="c">// 锁的名字</span>
+    int cpuid;     <span class="c">// 持有该锁的 CPU</span>
+} spinlock_t;      <span class="c">// typedef：以后 spinlock_t 就代表 struct spinlock</span></pre>
+<p>有结构体变量 <code>lk</code> 时用 <code>lk.locked</code>；手里是指针 <code>spinlock_t *lk</code> 时用 <code>lk-&gt;locked</code>，它是 <code>(*lk).locked</code> 的简写。内核函数收的几乎都是指针，所以你会一直看到 <code>-&gt;</code>。</p>
+
+<h2 id="cast">5. 把整数当地址用</h2>
+<p>设备寄存器在固定地址上（见<a href="memory.html#mmio">MMIO</a>）。C 允许把整数<b>强制转换</b>成指针，然后解引用：</p>
+<pre>*(unsigned char *)0x10000000 = 'A';   <span class="c">// 往串口的发送寄存器写一个字符</span></pre>
+<p>读法：先把 <code>0x10000000</code> 转成“指向 1 字节的指针”，再用 <code>*</code> 往那里写。框架的 <code>src/kernel/lib/type.h</code> 用宏把这个写法包了一层：</p>
+<pre>#define Reg(reg) ((volatile unsigned char *)(UART_BASE + reg))
+#define WriteReg(reg, v) (*(Reg(reg)) = (v))</pre>
+<p><code>#define</code> 是<b>宏</b>：编译前做纯文本替换，<code>WriteReg(THR, c)</code> 会被展开成上面那种写法。</p>
+
+<h2 id="volatile">6. volatile：别替我省掉这次读写</h2>
+<p>编译器会优化：如果它认为一个变量没人改，就可能只读一次、把值留在寄存器里反复用；连续两次写同一个地址，它可能只保留最后一次。</p>
+<p>对普通变量这没问题，对设备寄存器就错了：串口的状态寄存器会被硬件改，每次都必须真的去读。给类型加上 <code>volatile</code>，就是告诉编译器“每次读写都要真的访问内存”。</p>
+<p>多个 CPU 共享的标志也要加，比如框架里的 <code>volatile int panicked</code>：一个 CPU 设置它，别的 CPU 要能看到。注意 volatile 只管“别省略”，不保证多个 CPU 同时改时的正确性，那需要锁（Lab1 §6）。</p>
+
+<div class="ex">
+<h4>动手：指针和结构体</h4>
+<pre>cd prereq/examples
+make pointer</pre>
+<p>观察：<code>add_one(&amp;n)</code> 之后 n 变了；<code>q</code> 和 <code>q+1</code> 的地址差 4。试着把 <code>add_one</code> 改成收 <code>int p</code>、里面写 <code>p = p + 1</code>，再调 <code>add_one(n)</code>，n 还会变吗？</p>
+</div>
+
+<footer class="pager"><a href="memory.html">← 内存与地址</a><a href="bits.html">位运算 →</a></footer>
+</main>
+</body>
+</html>

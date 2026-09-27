@@ -11,6 +11,8 @@
 ```
 index.html            目录页
 assets/style.css      样式
+prereq/               预备知识：每个主题一页，主线的“预备”框链接到这里
+  examples/           配套示例
 NN-labN-xxx/
   index.html          讲义正文
   examples/           示例：跑一下看输出，不用改

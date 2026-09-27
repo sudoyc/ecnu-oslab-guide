@@ -43,4 +43,19 @@ else
     echo "✗ 00-lab0-env/examples/make-demo"; fail=1
 fi
 make -s -C 00-lab0-env/examples/make-demo clean >/dev/null 2>&1
+for t in memory pointer bits; do
+    if timeout 60 make -s -C prereq/examples "$t" >/dev/null 2>&1; then
+        echo "✓ prereq/examples $t"
+    else
+        echo "✗ prereq/examples $t"; fail=1
+    fi
+done
+if command -v "${CROSS:-riscv64-elf-}gcc" >/dev/null; then
+    if make -s -C prereq/examples asm >/dev/null 2>&1; then
+        echo "✓ prereq/examples asm"
+    else
+        echo "✗ prereq/examples asm"; fail=1
+    fi
+fi
+make -s -C prereq/examples clean >/dev/null 2>&1
 exit $fail

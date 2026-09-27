@@ -27,6 +27,11 @@
 <li><b>CSR</b>（控制与状态寄存器）：控制 CPU 本身行为的开关，比如当前权限、中断开没开、出错时跳到哪。只能用专门的 <code>csrr</code>/<code>csrw</code> 指令读写。框架的 <code>arch/method.h</code> 把它们包成了 <code>r_mstatus()</code>、<code>w_mepc()</code> 这样的函数。</li>
 <li><b>内存</b>：一个巨大的字节数组。QEMU 模拟的机器，内存从 <code>0x80000000</code> 开始。有些地址不是内存，而是设备，比如 <code>0x10000000</code> 是串口，往那里写一个字节，终端上就出现一个字符。</li>
 </ul>
+<div class="box pre">
+<span class="label">寄存器和内存</span>
+<p>寄存器在 CPU 里面，只有几十个，一条指令就能读写；内存在 CPU 外面，很大，但要用 load/store 指令专门去取。C 里的 <code>x = y + 1</code> 大致会变成：从内存把 y 取进寄存器，在寄存器里加 1，再存回 x 的地址。</p>
+<p>详细：<a href="../prereq/asm.html#reg">寄存器</a> · <a href="../prereq/memory.html#mmio">设备地址（MMIO）</a></p>
+</div>
 
 <h2>2. 通电之后</h2>
 <svg class="fig" viewBox="0 0 660 150" role="img" aria-label="启动流程：QEMU 跳到 0x80000000 的 _entry，设置栈后调用 start，mret 切到 S-mode 进入 main">
@@ -59,6 +64,11 @@ call start</pre>
 <text x="370" y="104" text-anchor="middle" class="muted">栈向左（低地址）增长</text>
 </svg>
 <p>为什么要 <code>+1</code>？因为栈向下增长，<code>sp</code> 必须从一块的<b>顶端</b>（高地址）开始。</p>
+<div class="box pre">
+<span class="label">读这几行汇编</span>
+<p>每行一条指令，第一个词是操作，后面是操作数，结果写进第一个寄存器。<code>la</code> 取地址，<code>li</code> 放一个常数，<code>csrr</code> 读 CSR，<code>addi</code>/<code>add</code>/<code>mul</code> 是加法和乘法，<code>call</code> 调用函数。</p>
+<p>详细：<a href="../prereq/asm.html#list">常用指令</a> · <a href="../prereq/asm.html#stack">栈与函数调用</a></p>
+</div>
 
 <div class="ex">
 <h4>动手 1：看函数调用怎么用栈</h4>
@@ -84,17 +94,23 @@ call start</pre>
 <li>把权限切换到 <code>mstatus.MPP</code> 字段记录的模式（“异常发生前我在哪个模式”）</li>
 <li>把 <code>pc</code> 设成 <code>mepc</code>（“异常发生前我在哪条指令”）</li>
 </ol>
+<div class="box pre">
+<span class="label">异常是什么</span>
+<p>程序出错（比如访问了不该访问的地址）或外设发来信号时，CPU 会停下当前代码，自动切到更高权限，跳去一段固定的处理代码。处理完再用 <code>mret</code>（或 S-mode 的 <code>sret</code>）回到原处。Lab3 会细讲，这里只需要知道 <code>mret</code> 是“回去”。</p>
+<p>详细：<a href="../prereq/trap.html#trap">异常与中断</a> · <a href="../prereq/trap.html#mret">mret 做了什么</a></p>
+</div>
 <p>我们根本没发生过异常，但可以<b>伪造</b>现场：把 MPP 改成 S，把 mepc 改成 <code>main</code> 的地址，然后 <code>mret</code>。CPU 就会“返回”到 S-mode 的 main。</p>
 
 <pre>uint64 status = r_mstatus();
-status &amp;= ~MSTATUS_MPP_MASK;   <span class="c"># 清掉第 11–12 位</span>
-status |= MSTATUS_MPP_S;       <span class="c"># 写成 01（S-mode）</span>
+status &amp;= ~MSTATUS_MPP_MASK;   <span class="c">// 清掉第 11–12 位</span>
+status |= MSTATUS_MPP_S;       <span class="c">// 写成 01（S-mode）</span>
 w_mstatus(status);
 <span class="c">// TODO：mepc 设为 main 的地址</span>
 <span class="c">// TODO：执行 mret（asm volatile("mret");）</span></pre>
 
 <div class="ex">
 <h4>练习 1：位运算 <code>exercise/bits/</code></h4>
+<p>没接触过 <code>&amp;</code>、<code>|</code>、<code>~</code>、<code>&lt;&lt;</code> 的话，先读 <a href="../prereq/bits.html">位运算</a>，最后一节就是拿 mstatus 举例。</p>
 <p>框架里改 MPP 的那两行，就是“只改某几位，其他位不动”。这种写法在内核里无处不在。补完 <code>set_mpp_s</code> 和 <code>get_mpp</code>，<code>make</code> 看到 4 个 PASS。</p>
 </div>
 
@@ -112,10 +128,15 @@ w_mstatus(status);
 <h3>UART：往一个地址写字节</h3>
 <p>QEMU 模拟了一个 16550 串口芯片，它的寄存器映射在 <code>0x10000000</code> 开始的几个字节上。这种“设备寄存器看起来像内存”的方式叫 <b>MMIO</b>（内存映射 I/O）。</p>
 <p><code>uart.c</code> 已经写好了，读一下 <code>uart_putc_sync</code>：</p>
-<pre>while ((ReadReg(LSR) &amp; LSR_TX_IDLE) == 0)   <span class="c"># 等串口说“我空闲了”</span>
+<pre>while ((ReadReg(LSR) &amp; LSR_TX_IDLE) == 0)   <span class="c">// 等串口说“我空闲了”</span>
     ;
-WriteReg(THR, c);                           <span class="c"># 把字节写进发送寄存器</span></pre>
+WriteReg(THR, c);                           <span class="c">// 把字节写进发送寄存器</span></pre>
 <p>串口很慢，发一个字节要时间，所以每次都得先等上一个发完。<code>ReadReg</code> 用了 <code>volatile</code>，告诉编译器“每次都真的去读这个地址”，否则编译器可能把循环优化成只读一次。</p>
+<div class="box pre">
+<span class="label">ReadReg 里的指针</span>
+<p><code>ReadReg(r)</code> 展开后大致是 <code>*(volatile unsigned char *)(0x10000000 + r)</code>：把一个整数地址转换成“指向字节的指针”，再用 <code>*</code> 读那个地址上的一个字节。</p>
+<p>详细：<a href="../prereq/pointer.html#cast">地址转换成指针</a> · <a href="../prereq/pointer.html#volatile">volatile</a></p>
+</div>
 
 <h3>printf：把格式串翻译成一串 putc</h3>
 <p>你要写的 printf 只做一件事：扫描格式串，普通字符直接输出，遇到 <code>%</code> 就根据下一个字符，从参数里取一个值并按格式输出。框架已经给了 <code>printint</code>（输出整数）和 <code>printptr</code>（输出 64 位十六进制）。</p>

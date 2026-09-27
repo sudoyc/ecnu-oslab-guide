@@ -1,0 +1,9 @@
+dist/
+node_modules/
+.wrangler/
+*.o
+01-lab1-boot/examples/race
+01-lab1-boot/*/bits/bits
+01-lab1-boot/*/printf/test
+01-lab1-boot/*/spinlock/test
+00-lab0-env/examples/make-demo/demo

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OS 实验讲义</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<main>
+<p class="kicker">ECNU 操作系统实验 · 2026 秋 · 非官方配套讲义</p>
+<h1>从零写一个内核</h1>
+<p class="lead">每个阶段对应课程的一个 lab。读完讲义、跑完示例、做完练习，你应该能看懂那个 lab 的指导书在要你做什么，以及为什么要这样做。</p>
+
+<p>写给零基础的同学：不假设你学过操作系统，C 和 RISC-V 汇编也从需要的地方讲起。这不是课程官方材料，也不是 lab 的答案；练习都在自己电脑上完成，帮你读懂 lab 在要求什么。</p>
+
+<div class="box">
+<span class="label">获取代码</span>
+<p>示例和练习要在自己电脑上跑。克隆仓库，或者在每个阶段页面顶部下载该阶段的压缩包：</p>
+<pre>git clone https://github.com/sudoyc/ecnu-oslab-guide.git
+cd ecnu-oslab-guide/01-lab1-boot/exercise/printf &amp;&amp; make</pre>
+<p>需要 Linux 或 macOS（Windows 用 WSL）和 <code>gcc</code>。RISC-V 工具链的安装见 <a href="00-lab0-env/index.html">Lab0</a> 第 6 节。</p>
+</div>
+
+<div class="box">
+<span class="label">怎么用这套讲义</span>
+<ol>
+<li>先读阶段的 <code>index.html</code>，遇到“动手”框就去跑对应的示例。</li>
+<li><code>examples/</code> 是看的：跑一下，观察输出，不用改。</li>
+<li><code>exercise/</code> 是做的：补完 TODO，<code>make</code> 看到全部 PASS 就算过关。</li>
+<li>卡住超过半小时再看仓库里的 <code>solution/</code>（网站上不放），看完合上，自己再写一遍。</li>
+<li>最后回到课程仓库，做真正的 lab。练习只帮你理解，不是 lab 的答案。</li>
+</ol>
+</div>
+
+<h2>阶段</h2>
+<div class="cards">
+<a class="card" href="00-lab0-env/index.html">
+<h3>00 · Lab0 环境与工具</h3>
+<p>操作系统是什么；编译、链接、ELF；Makefile；Git 分支；QEMU。</p>
+</a>
+<a class="card" href="01-lab1-boot/index.html">
+<h3>01 · Lab1 机器启动</h3>
+<p>RISC-V 寄存器与特权级；entry.S → start.c → main；UART 与 printf；中断与自旋锁。</p>
+</a>
+<a class="card" href="02-lab2-memory/index.html">
+<h3>02 · Lab2 内存管理 <span class="tag">提纲</span></h3>
+<p>物理页分配器、空闲链表、页表与内核虚拟内存。Lab1 完成后展开。</p>
+</a>
+</div>
+
+<h2>课程路线</h2>
+<table>
+<tr><th>阶段</th><th>实验</th></tr>
+<tr><td>基础设施</td><td>Lab1 机器启动 · Lab2 内存管理 · Lab3 中断与异常</td></tr>
+<tr><td>进程系统</td><td>Lab4 第一个用户进程 · Lab5 系统调用与用户虚拟内存 · Lab6 调度与生命周期</td></tr>
+<tr><td>文件系统</td><td>Lab7 磁盘与缓冲 · Lab8 inode/dentry/path · Lab9 文件管理与整合</td></tr>
+<tr><td>硬件扩展</td><td>Lab10 移植到 VisionFive 2 开发板</td></tr>
+</table>
+<p>两次检查：Lab1–3 一次，Lab1–9 一次。检查内容是 Git 提交记录、每个 lab 的 README 文档、代码能否通过测试。</p>
+<footer class="muted">讲义文字采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hans">CC BY-SA 4.0</a>，示例与练习代码采用 MIT 许可。发现错误欢迎在 <a href="https://github.com/sudoyc/ecnu-oslab-guide/issues">GitHub</a> 提 issue。</footer>
+</main>
+</body>
+</html>

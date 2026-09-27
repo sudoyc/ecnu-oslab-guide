@@ -1,0 +1,18 @@
+{
+  "name": "ecnu-oslab-guide",
+  "private": true,
+  "description": "ECNU 操作系统实验非官方配套讲义",
+  "scripts": {
+    "build": "bash scripts/build-site.sh",
+    "check": "bash scripts/check.sh",
+    "preview": "bash scripts/build-site.sh && wrangler dev",
+    "deploy": "bash scripts/build-site.sh && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.142.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true
+  }
+}

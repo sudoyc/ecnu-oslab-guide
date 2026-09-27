@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab1 机器启动</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="../index.html">← 目录</a><span>阶段 01 · 对应 lab1 分支 · <a href="../downloads/01-lab1-boot.zip">下载本阶段代码</a></span></nav>
+<h1>Lab1：机器启动</h1>
+<p class="lead">目标：让两个 CPU 从通电开始，一路走到 <code>main()</code>，并各自打印一句 <code>cpu N is booting!</code>。要做到这一点，你得补完四个地方。</p>
+
+<table>
+<tr><th>文件</th><th>要做什么</th><th>本讲义对应</th></tr>
+<tr><td><code>boot/start.c</code></td><td>设置返回地址，执行 <code>mret</code> 切换到 S-mode</td><td>§3、§4</td></tr>
+<tr><td><code>lib/print.c</code></td><td>实现 <code>printf</code> 和 <code>assert</code></td><td>§5 · 练习 2</td></tr>
+<tr><td><code>lock/spinlock.c</code></td><td>实现自旋锁的四个函数</td><td>§6 · 练习 3</td></tr>
+<tr><td><code>main.c</code></td><td>两个 CPU 分别初始化、打印</td><td>§7</td></tr>
+</table>
+
+<h2>1. CPU 眼里的世界</h2>
+<p>CPU 只会做一件事：从 <code>pc</code>（程序计数器）指向的地址取一条指令，执行，<code>pc</code> 往后挪，重复。它能直接操作的只有<b>寄存器</b>和<b>内存</b>。</p>
+<ul>
+<li><b>通用寄存器</b>：RISC-V 有 32 个，每个 64 位。C 代码里的局部变量、函数参数，大都在这里。常用的几个：<code>sp</code> 栈指针，<code>ra</code> 返回地址，<code>a0</code>–<code>a7</code> 函数参数和返回值，<code>tp</code> 线程指针（我们拿它存 CPU 编号）。</li>
+<li><b>CSR</b>（控制与状态寄存器）：控制 CPU 本身行为的开关，比如当前权限、中断开没开、出错时跳到哪。只能用专门的 <code>csrr</code>/<code>csrw</code> 指令读写。框架的 <code>arch/method.h</code> 把它们包成了 <code>r_mstatus()</code>、<code>w_mepc()</code> 这样的函数。</li>
+<li><b>内存</b>：一个巨大的字节数组。QEMU 模拟的机器，内存从 <code>0x80000000</code> 开始。有些地址不是内存，而是设备，比如 <code>0x10000000</code> 是串口，往那里写一个字节，终端上就出现一个字符。</li>
+</ul>
+
+<h2>2. 通电之后</h2>
+<svg class="fig" viewBox="0 0 660 150" role="img" aria-label="启动流程：QEMU 跳到 0x80000000 的 _entry，设置栈后调用 start，mret 切到 S-mode 进入 main">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="muted"/></marker></defs>
+<rect class="fill-w" x="10" y="40" width="130" height="60" rx="6"/><text x="75" y="66" text-anchor="middle">QEMU 加载 ELF</text><text x="75" y="86" text-anchor="middle" class="muted">pc = 0x80000000</text>
+<rect class="fill-w" x="180" y="40" width="130" height="60" rx="6"/><text x="245" y="66" text-anchor="middle">entry.S</text><text x="245" y="86" text-anchor="middle" class="muted">设置 sp</text>
+<rect class="fill-w" x="350" y="40" width="130" height="60" rx="6"/><text x="415" y="66" text-anchor="middle">start.c</text><text x="415" y="86" text-anchor="middle" class="muted">配置 CSR，mret</text>
+<rect class="fill-a" x="520" y="40" width="130" height="60" rx="6"/><text x="585" y="66" text-anchor="middle">main.c</text><text x="585" y="86" text-anchor="middle" class="muted">初始化、打印</text>
+<line class="stroke" x1="140" y1="70" x2="178" y2="70" marker-end="url(#ar)"/><line class="stroke" x1="310" y1="70" x2="348" y2="70" marker-end="url(#ar)"/><line class="stroke" x1="480" y1="70" x2="518" y2="70" marker-end="url(#ar)"/>
+<text x="245" y="126" text-anchor="middle" class="muted">M-mode</text><text x="415" y="126" text-anchor="middle" class="muted">M-mode</text><text x="585" y="126" text-anchor="middle" class="muted">S-mode</text>
+</svg>
+<p>QEMU 带 <code>-bios none</code> 启动，意思是没有固件，CPU 一通电 <code>pc</code> 就是 <code>0x80000000</code>。<code>kernel.ld</code> 把 <code>_entry</code> 放在这里，所以第一条执行的指令就在 <code>entry.S</code>。</p>
+<p>两个 CPU 是<b>同时</b>通电的，它们都从 <code>_entry</code> 开始，执行完全相同的代码。区分它们的唯一办法是读 CSR <code>mhartid</code>，cpu 0 读到 0，cpu 1 读到 1。</p>
+
+<h2>3. entry.S：先有栈，才有 C</h2>
+<p>C 函数一被调用，就要往栈上存东西：局部变量、要保存的寄存器、返回地址 <code>ra</code>。栈就是内存里的一块区域，<code>sp</code> 指向它的顶部，向低地址增长。</p>
+<p>刚通电时 <code>sp</code> 是随机值，直接调用 C 函数会把数据写到不知道哪里去。所以 <code>entry.S</code> 用汇编做的第一件事就是给每个 CPU 分一块栈：</p>
+<pre>la   sp, CPU_stack       <span class="c"># sp = CPU_stack 数组的起始地址</span>
+li   a0, 4096
+csrr a1, mhartid         <span class="c"># a1 = 我是几号 CPU</span>
+addi a1, a1, 1
+mul  a0, a0, a1          <span class="c"># a0 = 4096 * (hartid + 1)</span>
+add  sp, sp, a0          <span class="c"># sp 指向“我的那 4KB”的顶端</span>
+call start</pre>
+<svg class="fig" viewBox="0 0 560 120" role="img" aria-label="CPU_stack 数组被分成两块 4KB，cpu0 的 sp 指向第一块顶端，cpu1 的 sp 指向第二块顶端">
+<rect class="fill-a" x="40" y="30" width="220" height="44" rx="4"/><text x="150" y="57" text-anchor="middle">cpu 0 的栈 4KB</text>
+<rect class="fill-w" x="260" y="30" width="220" height="44" rx="4"/><text x="370" y="57" text-anchor="middle">cpu 1 的栈 4KB</text>
+<text x="40" y="96" class="muted">CPU_stack（低地址）</text>
+<text x="260" y="20" text-anchor="middle">↓ cpu 0 的 sp</text><text x="480" y="20" text-anchor="middle">↓ cpu 1 的 sp</text>
+<text x="370" y="104" text-anchor="middle" class="muted">栈向左（低地址）增长</text>
+</svg>
+<p>为什么要 <code>+1</code>？因为栈向下增长，<code>sp</code> 必须从一块的<b>顶端</b>（高地址）开始。</p>
+
+<div class="ex">
+<h4>动手 1：看函数调用怎么用栈</h4>
+<pre>cd examples && make stack</pre>
+<p>对比 <code>leaf</code> 和 <code>caller</code> 的反汇编。<code>leaf</code> 不调用别人，一条栈操作都没有。<code>caller</code> 一开头 <code>addi sp,sp,-48</code> 给自己开空间，然后 <code>sd ra,40(sp)</code> 把返回地址存起来，因为接下来调用 leaf 会覆盖 <code>ra</code>（反汇编里的 <code>auipc ra</code> + <code>jalr ra</code> 就是 <code>call leaf</code>，地址等链接时再填）。结尾 <code>ld ra</code> 恢复、<code>addi sp,sp,48</code> 还空间、<code>ret</code> 跳回 <code>ra</code>。</p>
+<p>这就是为什么没设 <code>sp</code> 就不能进 C：连第一条 <code>sd ra</code> 都会写坏内存。</p>
+</div>
+
+<h2>4. start.c：从 M-mode 降到 S-mode</h2>
+<h3>特权级</h3>
+<p>RISC-V 有三个权限等级。权限越高能碰的 CSR 和内存越多：</p>
+<table>
+<tr><th>模式</th><th>谁在这里跑</th><th>这门课里</th></tr>
+<tr><td>M-mode（机器）</td><td>固件，权限最高，什么都能做</td><td>只在 <code>start.c</code> 里短暂停留</td></tr>
+<tr><td>S-mode（监管者）</td><td>操作系统内核</td><td>内核大部分时间在这</td></tr>
+<tr><td>U-mode（用户）</td><td>普通程序</td><td>Lab4 起才有</td></tr>
+</table>
+<p>通电时在 M-mode。内核应该运行在 S-mode，因为后面的页表、系统调用等机制是围绕 S-mode 设计的。</p>
+
+<h3>怎么“降级”</h3>
+<p>RISC-V 没有“切换到 S-mode”这条指令。只有 <code>mret</code>：从 M-mode 的异常处理<b>返回</b>。它做两件事：</p>
+<ol>
+<li>把权限切换到 <code>mstatus.MPP</code> 字段记录的模式（“异常发生前我在哪个模式”）</li>
+<li>把 <code>pc</code> 设成 <code>mepc</code>（“异常发生前我在哪条指令”）</li>
+</ol>
+<p>我们根本没发生过异常，但可以<b>伪造</b>现场：把 MPP 改成 S，把 mepc 改成 <code>main</code> 的地址，然后 <code>mret</code>。CPU 就会“返回”到 S-mode 的 main。</p>
+
+<pre>uint64 status = r_mstatus();
+status &amp;= ~MSTATUS_MPP_MASK;   <span class="c"># 清掉第 11–12 位</span>
+status |= MSTATUS_MPP_S;       <span class="c"># 写成 01（S-mode）</span>
+w_mstatus(status);
+<span class="c">// TODO：mepc 设为 main 的地址</span>
+<span class="c">// TODO：执行 mret（asm volatile("mret");）</span></pre>
+
+<div class="ex">
+<h4>练习 1：位运算 <code>exercise/bits/</code></h4>
+<p>框架里改 MPP 的那两行，就是“只改某几位，其他位不动”。这种写法在内核里无处不在。补完 <code>set_mpp_s</code> 和 <code>get_mpp</code>，<code>make</code> 看到 4 个 PASS。</p>
+</div>
+
+<div class="box">
+<span class="label">为什么要先把 hartid 存进 tp</span>
+<p><code>mhartid</code> 是 M-mode 的 CSR，到了 S-mode 再读会触发异常。所以 start.c 趁还在 M-mode，把它复制到通用寄存器 <code>tp</code>。之后 <code>mycpuid()</code> 读的就是 <code>tp</code>。</p>
+</div>
+
+<div class="box warn">
+<span class="label">常见的坑：mret 之后卡住或乱跳</span>
+<p>xv6 的 start.c 在 mret 前还做了几件事：<code>w_medeleg/w_mideleg</code>（把异常和中断交给 S-mode 处理）、<code>w_pmpaddr0/w_pmpcfg0</code>（允许 S-mode 访问全部物理内存）。新版 QEMU 默认不给 S-mode 访问权限，没设 PMP 的话，mret 后取第一条指令就会出错。框架里如果没这几行，碰到卡住时先想到这里。</p>
+</div>
+
+<h2>5. 串口与 printf</h2>
+<h3>UART：往一个地址写字节</h3>
+<p>QEMU 模拟了一个 16550 串口芯片，它的寄存器映射在 <code>0x10000000</code> 开始的几个字节上。这种“设备寄存器看起来像内存”的方式叫 <b>MMIO</b>（内存映射 I/O）。</p>
+<p><code>uart.c</code> 已经写好了，读一下 <code>uart_putc_sync</code>：</p>
+<pre>while ((ReadReg(LSR) &amp; LSR_TX_IDLE) == 0)   <span class="c"># 等串口说“我空闲了”</span>
+    ;
+WriteReg(THR, c);                           <span class="c"># 把字节写进发送寄存器</span></pre>
+<p>串口很慢，发一个字节要时间，所以每次都得先等上一个发完。<code>ReadReg</code> 用了 <code>volatile</code>，告诉编译器“每次都真的去读这个地址”，否则编译器可能把循环优化成只读一次。</p>
+
+<h3>printf：把格式串翻译成一串 putc</h3>
+<p>你要写的 printf 只做一件事：扫描格式串，普通字符直接输出，遇到 <code>%</code> 就根据下一个字符，从参数里取一个值并按格式输出。框架已经给了 <code>printint</code>（输出整数）和 <code>printptr</code>（输出 64 位十六进制）。</p>
+<p>难点是<b>可变参数</b>：printf 不知道调用者传了几个参数、什么类型。C 用 <code>&lt;stdarg.h&gt;</code> 解决：</p>
+<pre>void printf(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);         <span class="c">// ap 指向 fmt 后面的第一个参数</span>
+    int n = va_arg(ap, int);   <span class="c">// 按 int 取一个，ap 自动后移</span>
+    char *s = va_arg(ap, char *);
+    va_end(ap);
+}</pre>
+<p>类型得你自己告诉 va_arg，这就是格式串存在的意义：<code>%d</code> 说“下一个是 int”，<code>%s</code> 说“下一个是 char *”。取错类型，读出来的就是垃圾。</p>
+<div class="box">
+<span class="label"><code>&lt;stdarg.h&gt;</code> 不是标准库吗？</span>
+<p>它是编译器自带的头文件，只是几个宏，展开成 GCC 内建操作，不需要链接任何库。所以带 <code>-ffreestanding -nostdlib</code> 的内核也能用。</p>
+</div>
+<div class="box warn">
+<span class="label">这里的 %p 和 %x 与标准 C 相反</span>
+<p>框架规定：<code>%p</code> 是 32 位无符号十六进制，不带前缀；<code>%x</code> 是 64 位、带 <code>0x</code>、固定 16 位宽。按框架注释来，不要按平时的习惯来。</p>
+</div>
+
+<div class="ex">
+<h4>练习 2：printf <code>exercise/printf/</code></h4>
+<p>在本机实现 <code>kprintf</code>。<code>kputc</code> 在测试里会把字符收集起来，和期望结果比对。12 个用例全部 PASS 后，把函数体搬到内核的 <code>print.c</code>，把 <code>kputc</code> 换回 <code>uart_putc_sync</code>，再加上 §6 的锁。</p>
+<p>顺手把 <code>assert</code> 也写了：条件为假就 <code>panic(warning)</code>，一行。</p>
+</div>
+
+<h2>6. 两个 CPU 抢一个串口：自旋锁</h2>
+<h3>问题长什么样</h3>
+<p><code>printf("hello")</code> 其实是 5 次 <code>uart_putc_sync</code>。两个 CPU 同时 printf，这些调用会交错，输出变成 <code>hcpeullo...</code>。同样的问题也出现在任何共享变量上：<code>sum++</code> 看起来是一步，实际是三条指令：</p>
+<pre>lw   a5, sum      <span class="c"># 读</span>
+addi a5, a5, 1    <span class="c"># 加</span>
+sw   a5, sum      <span class="c"># 写回</span></pre>
+<p>cpu 0 读到 100，cpu 1 也读到 100，两人各加 1 写回 101。加了两次，只涨了 1。这叫<b>竞态条件</b>（race condition）。</p>
+
+<div class="ex">
+<h4>动手 2：亲眼看到丢失的加法</h4>
+<pre>cd examples && make race
+./race none      <span class="c"># 两个线程各加 100 万次，结果远小于 2000000</span>
+./race fine      <span class="c"># 每次 ++ 前后加锁：正确，但慢</span>
+./race coarse    <span class="c"># 整个循环加一次锁：正确且快，但两个线程变成了串行</span></pre>
+<p>两个线程就是两个 CPU 的替身。这正是课程 README §4.1 “并行加法”要你在内核里做的实验。</p>
+</div>
+
+<h3>锁：一个原子的“检查并占住”</h3>
+<p>最朴素的想法：</p>
+<pre>while (lk->locked) ;   <span class="c">// 等别人放手</span>
+lk->locked = 1;        <span class="c">// 我占住</span></pre>
+<p>行不通。两个 CPU 可能同时看到 <code>locked == 0</code>，同时跳出循环，同时占住。“检查”和“占住”之间有缝，缝里就会出竞态。</p>
+<p>解决办法是硬件提供的原子指令。<code>__sync_lock_test_and_set(&amp;x, 1)</code> 在 RISC-V 上编译成 <code>amoswap.w.aq</code>：把 1 写进 x，同时返回 x 原来的值，这一整步不可能被打断。返回 0 说明是我把它从 0 变成了 1，抢到了；返回 1 说明本来就被占着，继续转：</p>
+<pre>while (__sync_lock_test_and_set(&amp;lk->locked, 1) != 0)
+    ;</pre>
+<p>一直原地转圈等待，所以叫<b>自旋锁</b>。</p>
+
+<h3>内存屏障</h3>
+<p>编译器和 CPU 为了快，可能重排内存读写的顺序。如果临界区里的 <code>sum++</code> 被挪到了抢锁之前，锁就白加了。<code>__sync_synchronize()</code> 是一道屏障：它之前的读写必须在它之后的读写开始前完成。acquire 之后放一道，release 之前放一道，临界区就被“夹”住了。</p>
+
+<h3>死锁的第二种来源：中断</h3>
+<p>第一种死锁很好懂：同一个 CPU 对同一把锁 acquire 两次，第二次会永远等自己放手。所以 acquire 要先检查 <code>spinlock_holding</code>，发现是自己持有就 panic。</p>
+<p>第二种更隐蔽。cpu 0 拿着 printf 的锁正在输出，这时来了一个中断（Lab3 会有时钟中断），CPU 暂停当前代码去跑中断处理函数。如果中断处理函数里也调用 printf，它会去抢同一把锁。锁在 cpu 0 自己手里，而持有者要等中断处理完才能继续，于是永远等下去。</p>
+<p>办法是：<b>持有锁期间关中断</b>。acquire 第一步 <code>push_off()</code>，release 最后一步 <code>pop_off()</code>。框架已经写好了这两个函数，它们用计数器支持嵌套：拿两把锁就关两层，全放掉才恢复原状。</p>
+
+<div class="ex">
+<h4>练习 3：自旋锁 <code>exercise/spinlock/</code></h4>
+<p>测试用两个线程模拟两个 CPU，<code>mycpuid()</code> 返回线程编号，<code>push_off/pop_off</code> 是打桩函数，会检查你调用的次数是否配对。全部 PASS 后，代码基本可以原样搬进内核的 <code>spinlock.c</code>。</p>
+</div>
+
+<p>最后在 print.c 里用上它：<code>print_init</code> 已经初始化了 <code>print_lk</code>，你在 printf 开头 acquire、结尾 release。注意 <code>panic</code> 里也调用了 printf，如果 panic 发生时本 CPU 正持有 print_lk，就会触发重复上锁。xv6 的做法是用一个 <code>locking</code> 标志，panic 时关掉 printf 的加锁。</p>
+
+<h2>7. main.c：谁先谁后</h2>
+<p>两个 CPU 同时进入 main。有些初始化只能做一次（初始化串口、初始化锁），必须由一个 CPU 做完，另一个才能开始用。常见写法：</p>
+<pre>volatile static int started = 0;
+
+int main()
+{
+    int cpuid = mycpuid();
+    if (cpuid == 0) {
+        print_init();                 <span class="c">// 只做一次</span>
+        printf("cpu %d is booting!\n", cpuid);
+        __sync_synchronize();
+        started = 1;                  <span class="c">// 通知 cpu 1：可以了</span>
+    } else {
+        while (started == 0) ;        <span class="c">// 等 cpu 0 初始化完</span>
+        __sync_synchronize();
+        printf("cpu %d is booting!\n", cpuid);
+    }
+    while (1) ;
+}</pre>
+<p><code>started</code> 必须是 <code>volatile</code>，否则编译器看到循环里没人改它，会把 <code>while (started == 0)</code> 优化成只读一次的死循环。</p>
+<p>做完后运行 <code>make run</code>，应该看到：</p>
+<pre>cpu 0 is booting!
+cpu 1 is booting!</pre>
+
+<div class="box">
+<span class="label">课后实验</span>
+<p>README §4.1：把 <code>examples/race.c</code> 的实验搬进内核，两个 CPU 各加 100 万次共享 sum，先不加锁看结果，再用你的自旋锁修正。<br>
+§4.2：去掉 printf 里的锁，想办法让两个 CPU 的输出交错（提示：让两个 CPU 同时反复打印长字符串）。</p>
+</div>
+
+<h2>8. 自检</h2>
+<details><summary>为什么 entry.S 必须用汇编写，不能直接写 C？</summary>
+<p>C 函数一开头就要用栈，而这时 sp 还没设。设置 sp 这件事本身只能用汇编。</p></details>
+<details><summary>mret 之后 CPU 跑到哪里、在什么模式？</summary>
+<p>跑到 mepc 里的地址（我们设成 main），模式变成 mstatus.MPP 记录的模式（我们设成 S）。</p></details>
+<details><summary>为什么 cpu 1 不能也调用 print_init？</summary>
+<p>print_init 会初始化 print_lk。如果 cpu 0 正持有这把锁时 cpu 1 把它重置成未锁，锁就失效了。串口初始化也同理，做两次可能打断正在进行的输出。</p></details>
+<details><summary>持有自旋锁时为什么不能开中断？</summary>
+<p>中断处理函数可能去抢同一把锁，而持有者要等中断处理完才能继续，同一个 CPU 自己等自己，死锁。</p></details>
+
+<footer class="pager"><a href="../00-lab0-env/index.html">← Lab0 环境与工具</a><a href="../index.html">目录 →</a></footer>
+</main>
+</body>
+</html>

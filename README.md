@@ -34,7 +34,9 @@ cd 01-lab1-boot/exercise/printf
 make
 ```
 
-RISC-V 交叉工具链和 QEMU 只在看反汇编、跑真正的 lab 时需要，安装方法见 Lab0 讲义第 6 节。
+参考答案在每个阶段的 `solution/` 目录。网站和压缩包里都没有，克隆本仓库就能看到。
+
+RISC-V 交叉工具链和 QEMU 只在看反汇编、跑真正的 lab 时需要，安装方法见 Lab0 讲义第 2 节。
 
 ## 维护
 

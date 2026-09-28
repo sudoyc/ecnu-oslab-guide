@@ -54,6 +54,8 @@ brew tap riscv-software-src/riscv && brew install riscv-tools qemu
 
 不同发行版的编译器前缀不一样：Arch 是 `riscv64-elf-`，Debian/Ubuntu 是 `riscv64-linux-gnu-`，Homebrew 是 `riscv64-unknown-elf-`。下文命令都写 `riscv64-elf-`，请换成你的。课程框架的 `common.mk` 默认 `TOOLPREFIX = riscv64-linux-gnu-`，前缀不同就在命令行覆盖，例如 `make TOOLPREFIX=riscv64-elf- run`。本讲义示例的 Makefile 用的变量叫 `CROSS`，用法相同。
 
+GCC 15 起默认按 C23 标准编译，C23 里 `bool`、`true`、`false` 是关键字，而框架的 `arch/type.h` 自己定义了它们，会报 `cannot use keyword 'false'`。用 `riscv64-elf-gcc --version` 看版本，15 或更高就在命令行指定旧标准：`make TOOLPREFIX=riscv64-elf- CC="riscv64-elf-gcc -std=gnu17" run`。
+
 讲义里的练习只需要普通的 `gcc`，工具链没装好也能先做练习。
 
 </Aside>
@@ -176,14 +178,26 @@ git add 文件 && git commit -m "说明"   # 存一个提交
 git push                     # 发到远端
 ```
 
-## 6. QEMU 与 GDB
+## 6. QEMU 与 GDB {#gdb}
 
 ```sh
 make run      # 编译内核并在 QEMU 里跑，输出直接出现在终端。退出：Ctrl-A 然后按 X
 make debug    # QEMU 启动后暂停，等 GDB 连上
 ```
 
-**GDB** 是调试器：能让程序停在某一行，看此刻变量和寄存器的值，再一步一步往下走。另开一个终端运行 `riscv64-elf-gdb`（Debian/Ubuntu 是 `gdb-multiarch`），执行 `target remote :1234` 连上 QEMU，就能 `b main` 在 main 处打断点、`c` 继续运行到断点、`si` 单步执行一条指令、`info reg` 看所有寄存器。Lab1 调试启动流程时会大量用到。
+**GDB** 是调试器：能让程序停在某一行，看此刻变量和寄存器的值，再一步一步往下走。
+
+`make debug` 打印的 QEMU 命令里有一段 `-gdb tcp::26000`，这个数字是 GDB 要连的端口。框架按你的用户编号算端口（`id -u` 除以 5000 的余数加 25000），所以每个人可能不一样，以自己屏幕上的为准。另开一个终端，在框架目录下运行 `riscv64-elf-gdb`（Debian/Ubuntu 是 `gdb-multiarch`），依次输入：
+
+```text
+set architecture riscv:rv64
+symbol-file target/kernel/kernel-qemu.elf
+target remote :26000
+```
+
+第二行告诉 GDB 内核文件在哪，这样它才认识 `main` 这些名字；第三行连上 QEMU，端口换成你的。之后常用的命令：`b main` 在 main 处打断点，`c` 继续运行到断点，`si` 单步执行一条指令，`p $pc` 看某个寄存器，`info reg` 看所有寄存器，Ctrl-C 让正在跑的内核停下来。Lab1 调试启动流程时会用到。
+
+框架自带的 `.gdbinit` 里 `target remote` 那行被注释掉了，`symbol-file` 的路径也不对，所以这里手动输入。
 
 ## 7. 自检
 

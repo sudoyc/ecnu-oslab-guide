@@ -3,16 +3,22 @@
   "private": true,
   "description": "ECNU 操作系统实验非官方配套讲义",
   "scripts": {
-    "build": "bash scripts/build-site.sh",
+    "dev": "astro dev",
+    "build": "astro build && bash scripts/build-site.sh",
     "check": "bash scripts/check.sh",
-    "preview": "bash scripts/build-site.sh && wrangler dev",
-    "deploy": "bash scripts/build-site.sh && wrangler deploy"
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@astrojs/markdown-satteri": "0.4.2",
+    "@astrojs/starlight": "0.42.4",
+    "astro": "7.3.5",
+    "starlight-links-validator": "0.26.0",
     "wrangler": "4.142.0"
   },
   "allowScripts": {
     "esbuild": true,
     "workerd": true
-  }
+  },
+  "type": "module"
 }

@@ -1,0 +1,39 @@
+/* 沿用旧站的墨绿色调；Starlight 的 :root 是深色，[data-theme='light'] 是浅色 */
+:root {
+  --sl-color-accent-low: #1f3129;
+  --sl-color-accent: #3c8f76;
+  --sl-color-accent-high: #bfe6d8;
+  --sl-font: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d8eee6;
+  --sl-color-accent: #2f6f5e;
+  --sl-color-accent-high: #1a4034;
+}
+
+.sl-markdown-content { line-height: 1.8; }
+
+/* 页面顶部的“对应 lab / 下载代码”一行 */
+.page-meta {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+  border-bottom: 1px solid var(--sl-color-hairline);
+  padding-bottom: 0.6rem;
+}
+
+/* 手画的示意图：颜色跟随主题 */
+svg.fig { width: 100%; height: auto; display: block; margin: 1.5rem 0; }
+svg.fig text { fill: var(--sl-color-white); font-size: 13px; font-family: var(--sl-font); }
+svg.fig .stroke { stroke: var(--sl-color-gray-3); fill: none; }
+svg.fig .muted { fill: var(--sl-color-gray-3); }
+svg.fig .fill-a { fill: var(--sl-color-accent-low); stroke: var(--sl-color-accent); }
+svg.fig .fill-w { fill: var(--sl-color-orange-low); stroke: var(--sl-color-orange); }
+
+/* 自检题 */
+.sl-markdown-content details {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+.sl-markdown-content details > summary { cursor: pointer; font-weight: 600; }

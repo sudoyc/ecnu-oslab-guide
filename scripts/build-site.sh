@@ -1,31 +1,22 @@
 #!/usr/bin/env bash
-# 生成要部署的静态站点到 dist/：页面、样式、examples、exercise，以及每个阶段的 zip。
+# astro build 之后执行：把 examples、exercise 拷进 dist/，并给每个阶段打 zip。
 # solution/ 不进网站，只留在仓库里。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-rm -rf dist
+rm -rf dist/downloads
 mkdir -p dist/downloads
-cp index.html 404.html dist/
-cp -r assets dist/
-
-for stage in [0-9][0-9]-*/; do
+for stage in [0-9][0-9]-*/ prereq/; do
     stage=${stage%/}
-    mkdir -p "dist/$stage"
-    cp "$stage/index.html" "dist/$stage/"
+    subs=()
     for sub in examples exercise; do
-        [ -d "$stage/$sub" ] && cp -r "$stage/$sub" "dist/$stage/"
+        [ -d "$stage/$sub" ] && subs+=("$stage/$sub")
     done
-    if [ -d "dist/$stage/examples" ] || [ -d "dist/$stage/exercise" ]; then
-        (cd dist && zip -qr "downloads/$stage.zip" "$stage" -x "$stage/index.html")
-    fi
+    [ ${#subs[@]} -eq 0 ] && continue
+    mkdir -p "dist/$stage"
+    cp -r "${subs[@]}" "dist/$stage/"
+    (cd dist && zip -qr "downloads/$stage.zip" "${subs[@]}")
 done
-
-# 预备知识：多个页面加一份示例
-mkdir -p dist/prereq
-cp prereq/*.html dist/prereq/
-cp -r prereq/examples dist/prereq/
-(cd dist && zip -qr downloads/prereq.zip prereq/examples)
 
 # 构建产物不该出现在站点里
 find dist \( -name '*.o' -o -name test -o -name race -o -name demo -o -name bits \

@@ -1,0 +1,91 @@
+---
+title: "指针、结构体与 volatile"
+description: "内核代码几乎都在传地址：锁传地址、设备寄存器用地址访问、页表里存的也是地址。这一页先读内存与地址。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<p class="page-meta">
+主线用到：Lab1 §5–6，之后每个 lab
+</p>
+
+内核代码几乎都在传地址：锁传地址、设备寄存器用地址访问、页表里存的也是地址。这一页先读[内存与地址](/prereq/memory/)。
+
+## 1. 指针就是存地址的变量 {#pointer}
+
+```c
+int n = 10;
+int *p = &n;     // &n：取 n 的地址。p 的类型是 int *，“指向 int 的指针”
+*p = 11;         // *p：去 p 存的地址那里，把那个 int 改成 11。现在 n == 11
+```
+
+- `&变量`：取地址。
+- `*指针`：顺着地址找到那个变量，可以读也可以写。这叫**解引用**。
+- 声明里的 `*`（`int *p`）只是说“p 是指针”，和解引用是两回事，只是长得一样。
+
+指针自己也是变量，占 8 字节，里面存的就是一个地址数字。`char *s` 指向一个字符，C 的字符串就是“从这个地址开始，一直到 `'\0'` 为止的字节”，所以函数收字符串参数都写 `char *`。
+
+## 2. 为什么要传地址 {#why}
+
+C 调函数时，参数是**复制**一份传进去的。函数改的是复制品，调用者的变量不变。想让函数改到调用者的变量，就把变量的地址传进去：
+
+```c
+void add_one(int *p) { *p = *p + 1; }
+add_one(&n);     // n 真的加了 1
+```
+
+锁就是这样用的：`spinlock_acquire(&lk)` 传的是锁的地址，所有 CPU 操作的是内存里同一把锁，而不是各自的复制品。
+
+## 3. 指针和数组 {#array}
+
+数组名在大多数地方会变成首元素的地址。`p + 1` 不是地址加 1，而是加一个元素的大小：`int *` 加 1，地址加 4。所以 `p[i]` 和 `*(p + i)` 完全一样。
+
+## 4. 结构体与 -&gt; {#struct}
+
+结构体把几个变量打包成一个类型。课程框架里的自旋锁（`src/kernel/lock/type.h`）：
+
+```c
+typedef struct spinlock {
+    int locked;    // 是否上锁
+    char *name;    // 锁的名字
+    int cpuid;     // 持有该锁的 CPU
+} spinlock_t;      // typedef：以后 spinlock_t 就代表 struct spinlock
+```
+
+有结构体变量 `lk` 时用 `lk.locked`；手里是指针 `spinlock_t *lk` 时用 `lk->locked`，它是 `(*lk).locked` 的简写。内核函数收的几乎都是指针，所以你会一直看到 `->`。
+
+## 5. 把整数当地址用 {#cast}
+
+设备寄存器在固定地址上（见[MMIO](/prereq/memory/#mmio)）。C 允许把整数**强制转换**成指针，然后解引用：
+
+```c
+*(unsigned char *)0x10000000 = 'A';   // 往串口的发送寄存器写一个字符
+```
+
+读法：先把 `0x10000000` 转成“指向 1 字节的指针”，再用 `*` 往那里写。框架的 `src/kernel/lib/type.h` 用宏把这个写法包了一层：
+
+```c
+#define Reg(reg) ((volatile unsigned char *)(UART_BASE + reg))
+#define WriteReg(reg, v) (*(Reg(reg)) = (v))
+```
+
+`#define` 是**宏**：编译前做纯文本替换，`WriteReg(THR, c)` 会被展开成上面那种写法。
+
+## 6. volatile：别替我省掉这次读写 {#volatile}
+
+编译器会优化：如果它认为一个变量没人改，就可能只读一次、把值留在寄存器里反复用；连续两次写同一个地址，它可能只保留最后一次。
+
+对普通变量这没问题，对设备寄存器就错了：串口的状态寄存器会被硬件改，每次都必须真的去读。给类型加上 `volatile`，就是告诉编译器“每次读写都要真的访问内存”。
+
+多个 CPU 共享的标志也要加，比如框架里的 `volatile int panicked`：一个 CPU 设置它，别的 CPU 要能看到。注意 volatile 只管“别省略”，不保证多个 CPU 同时改时的正确性，那需要锁（Lab1 §6）。
+
+<Aside type="tip" icon="pencil" title="动手：指针和结构体">
+
+```sh
+cd prereq/examples
+make pointer
+```
+
+观察：`add_one(&n)` 之后 n 变了；`q` 和 `q+1` 的地址差 4。试着把 `add_one` 改成收 `int p`、里面写 `p = p + 1`，再调 `add_one(n)`，n 还会变吗？
+
+</Aside>

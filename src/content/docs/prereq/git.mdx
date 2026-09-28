@@ -1,0 +1,79 @@
+---
+title: "Git 基础"
+description: "这门课检查时会看你的提交记录，所以 Git 不是可选工具。这一页讲清三个概念（提交、分支、远端）和每天用的那几条命令。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<p class="page-meta">
+主线用到：Lab0 §6，之后每个 lab 的提交
+</p>
+
+这门课检查时会看你的提交记录，所以 Git 不是可选工具。这一页讲清三个概念（提交、分支、远端）和每天用的那几条命令。
+
+## 1. 提交：项目的存档点 {#commit}
+
+Git 记录的是一连串**提交**（commit）。每个提交是项目在某个时刻的完整快照，加上一句说明、作者和时间。每个提交有一个唯一编号（一长串十六进制，平时取前 7 位，比如 `bb93e7e`），并记着它的上一个提交是谁，于是连成一条历史。
+
+改文件不会自动产生提交。流程是三步：
+
+1. 在工作目录里改文件。
+2. `git add 文件`：把这次要存的改动放进“暂存区”，相当于挑出要进存档的东西。
+3. `git commit -m "说明"`：把暂存区的内容做成一个提交。
+
+```sh
+git status                  # 哪些文件改了、哪些已暂存
+git diff                    # 还没暂存的改动具体是什么
+git add src/kernel/lib/print.c
+git commit -m "lab1: implement printf"
+git log --oneline           # 看历史，每行一个提交
+```
+
+只 add 这次相关的文件。编译产物（`.o`、`target/` 目录）不要提交，仓库里的 `.gitignore` 文件列出了 Git 该忽略的东西。
+
+## 2. 分支：一条独立的历史线 {#branch}
+
+**分支**是一个会移动的名字，指向某个提交。在一个分支上提交，这个名字就往前挪到新提交上。从同一个提交出发开两个分支，各自提交，历史就分成两条，互不影响。
+
+```sh
+git branch                  # 列出本地分支，* 是当前所在的
+git switch lab1             # 切到 lab1 分支，工作目录的文件会变成那条线上的样子
+git switch -c my-try        # 新建分支 my-try 并切过去
+git log --oneline --graph --all   # 用图看所有分支的关系
+```
+
+课程仓库每个 lab 一个分支（`lab0`、`lab1`……），分支上是做这个 lab 需要的框架代码和指导书。
+
+两条线要汇合时用**合并**：`git merge 别的分支` 把那条线的改动合进当前分支。如果两边改了同一个地方，Git 会报**冲突**，在文件里用 `<<<<<<<`、`=======`、`>>>>>>>` 标出两个版本，你手动改成想要的样子，再 add、commit。
+
+## 3. 远端：别人电脑上的同一个仓库 {#remote}
+
+你电脑上的仓库是完整的，不联网也能提交。**远端**（remote）是放在服务器上（比如 Gitee、GitHub）的另一份拷贝，通常叫 `origin`。队友之间通过它交换提交。
+
+```sh
+git clone 地址               # 第一次：把远端整个复制下来
+git pull                    # 拿远端的新提交，合进当前分支
+git push                    # 把本地的新提交发到远端
+git push -u origin lab1     # 第一次推一个新分支：-u 记住对应关系，以后直接 git push
+```
+
+远端的分支在本地显示为 `origin/lab1` 这样的名字，它是“上次 pull 时远端的样子”，不会自己更新。
+
+## 4. 每天的流程 {#daily}
+
+```sh
+git pull                    # 开始前先同步队友的提交
+# ……改代码、编译、测试……
+git status
+git add 改过的文件
+git commit -m "lab1: add spinlock"
+git push
+```
+
+小步提交：做完一个能说清楚的小功能就提交一次，说明写“做了什么”。两个人同时改同一个分支时，先 pull 再 push，否则 push 会被拒绝。
+
+<Aside type="caution" title="这几条会丢东西，用前想清楚">
+
+`git reset --hard`（丢弃所有没提交的改动）、`git push --force`（用本地历史覆盖远端，队友的提交可能消失）、`git clean -f`（删掉没被跟踪的文件）。不确定时先 `git switch -c backup` 留个分支。
+
+</Aside>

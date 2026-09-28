@@ -1,0 +1,73 @@
+---
+title: "特权级与异常"
+description: "Lab1 最难的一步是用 mret “返回”到一个从没来过的地方。要看懂它，得先知道 CPU 平时是怎么“进去”的。这一页先读汇编最小集和位运算。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<p class="page-meta">
+主线用到：Lab1 §4、§6，Lab3 整个
+</p>
+
+Lab1 最难的一步是用 `mret` “返回”到一个从没来过的地方。要看懂它，得先知道 CPU 平时是怎么“进去”的。这一页先读[汇编最小集](/prereq/asm/)和[位运算](/prereq/bits/)。
+
+## 1. 为什么要分权限 {#why}
+
+如果普通程序能随便改任何内存、随便操作磁盘，一个有 bug 的程序就能弄坏整台机器，别的程序也无法保护自己的数据。所以 CPU 在硬件上分了等级：当前处在哪个等级，决定了能执行哪些指令、能访问哪些寄存器和内存。
+
+RISC-V 有三个**特权级**（也叫模式）：
+
+| 模式 | 权限 | 谁在这里跑 |
+| --- | --- | --- |
+| M-mode（Machine） | 最高，什么都能做 | 通电后的第一段代码（固件） |
+| S-mode（Supervisor） | 中等，能管内存映射和大多数设备 | 操作系统内核 |
+| U-mode（User） | 最低 | 普通程序 |
+
+低权限的代码想做高权限的事（比如读文件），不能直接做，只能“请求”高权限的一方来做。这个请求的机制就是下面的异常。
+
+## 2. 异常：CPU 被迫中途转向 {#trap}
+
+CPU 正在按顺序执行指令，有时会发生必须立刻处理的事：
+
+- **异常**（exception）：当前这条指令出了问题，比如访问了不允许的地址、执行了没权限的指令，或者主动执行 `ecall` 请求高权限帮忙（这就是 Lab5 的系统调用）。
+- **中断**（interrupt）：外部来的通知，和当前指令无关。比如时钟每隔一段时间“敲一下”CPU，或者串口收到了一个字符。
+
+这两者 RISC-V 统称 **trap**，处理方式相同：CPU 暂停手头的事，跳到一段预先指定的**处理函数**，处理完再回来接着做。为了“回得来”，CPU 在跳走之前会**自动**记下现场。
+
+### 进入 M-mode 的 trap 时，硬件自动做的事 {#enter}
+
+1. `mepc` ← 当前的 `pc`（“我是在哪条指令被打断的”）
+2. `mcause` ← 原因编号（“为什么被打断”）
+3. `mstatus.MPP` ← 当前模式（“被打断之前我在哪个模式”），然后切换到 M-mode
+4. `mstatus.MPIE` ← `mstatus.MIE`，然后 MIE 置 0（记下中断原来开没开，并先关掉中断，免得处理过程中又被打断）
+5. `pc` ← `mtvec`（跳到处理函数）
+
+这些 m 开头的都是 **CSR**（控制与状态寄存器），只能用 `csrr`/`csrw` 指令读写。框架的 `src/kernel/arch/method.h` 把它们包成了 C 函数，比如 `r_mstatus()` 读、`w_mepc(x)` 写，里面就是一行内联汇编。MPP 是 `mstatus` 的第 11–12 位：`00` 表示 U，`01` 表示 S，`11` 表示 M。
+
+### mret：原路返回 {#mret}
+
+处理函数做完事，执行 `mret`，硬件把上面的过程倒过来：
+
+1. 模式 ← `mstatus.MPP`
+2. `mstatus.MIE` ← `mstatus.MPIE`
+3. `pc` ← `mepc`
+
+注意 `mret` **不检查**之前是不是真的发生过 trap，它只看这几个寄存器里现在写的是什么。这就给了 Lab1 一个机会：通电时在 M-mode，从没发生过 trap，但我们可以手动把 MPP 写成 S、把 mepc 写成 `main` 的地址，再执行 `mret`。CPU 就会切到 S-mode，并从 main 开始执行。这是 RISC-V 上从 M-mode 进入 S-mode 的标准做法，因为并没有一条“切换模式”的指令。
+
+S-mode 有一套平行的寄存器和指令：`sepc`、`scause`、`sstatus.SPP`、`stvec`、`sret`。Lab3 处理中断和异常时用的是这一套。
+
+## 3. 委托和 PMP：start.c 里另外几行 {#deleg}
+
+默认情况下，不管在哪个模式发生 trap，都交给 M-mode 处理。但我们的内核跑在 S-mode，希望自己处理。`medeleg`（异常）和 `mideleg`（中断）两个 CSR 就是“委托”开关：某一位置 1，对应的 trap 就直接交给 S-mode。
+
+**PMP**（物理内存保护）是 M-mode 给低权限模式划定“能访问哪些物理地址”的机制，由 `pmpaddr0`、`pmpcfg0` 等 CSR 设置。一个都没设时，S-mode 什么内存都访问不了，mret 之后取第一条指令就会出错。所以 xv6 会在 mret 前把 PMP 设成“允许访问全部内存”。
+
+## 4. 开关中断 {#intr}
+
+中断随时可能来。有时内核必须保证一段代码不被打断（Lab1 §6 持有锁的时候），就先关中断，做完再开。S-mode 下的总开关是 `sstatus` 的 SIE 位，框架里 `intr_on()`/`intr_off()` 就是置位和清位（写法见[位运算](/prereq/bits/#idioms)）。Lab1 还没有真正的中断，Lab3 会打开时钟中断。
+
+<Aside type="note" title="小结">
+
+trap 进去：硬件存 pc 到 mepc、存模式到 MPP、跳到 mtvec。mret 出来：按 MPP 切模式、跳到 mepc。Lab1 只用“出来”这一半，但要自己把“进去”时本该存的东西填好。
+
+</Aside>

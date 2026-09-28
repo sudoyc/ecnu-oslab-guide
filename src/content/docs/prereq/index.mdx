@@ -1,0 +1,29 @@
+---
+title: "预备知识"
+description: "主线讲义假设你只学过基础 C 语法：变量、分支、循环、函数、数组。超出这些的东西，主线里会用“预备”小框给一句话的解释，想弄透就来这里。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<p class="page-meta">
+预备知识 · [下载示例代码](/downloads/prereq.zip)
+</p>
+
+主线讲义假设你只学过基础 C 语法：变量、分支、循环、函数、数组。超出这些的东西，主线里会用“预备”小框给一句话的解释，想弄透就来这里。
+
+不用一口气读完。主线里哪个小框看不懂，就点它的链接跳过来，读完对应一节再回去。每页的例子都在 `prereq/examples/`，本机有 `gcc` 就能跑。
+
+## 主题
+
+<CardGrid>
+<LinkCard title="内存、地址与十六进制" description="内存是按编号排好的字节；地址为什么常写成 0x80000000；一个 int 占几个字节。" href="/prereq/memory/" />
+<LinkCard title="指针、结构体与 volatile" description="& 和 *；-> 是什么；为什么内核到处传地址；volatile 告诉编译器什么。" href="/prereq/pointer/" />
+<LinkCard title="二进制与位运算" description="第几位怎么数；& | ~ << >>；“只改某几位，其他不动”的固定写法。" href="/prereq/bits/" />
+<LinkCard title="RISC-V 汇编最小集" description="寄存器；指令的格式；Lab1 用到的十几条指令；栈和函数调用在汇编里长什么样。" href="/prereq/asm/" />
+<LinkCard title="特权级与异常" description="CPU 为什么要分权限；异常发生时 CPU 自动做了什么；mret 怎么“返回”。" href="/prereq/trap/" />
+<LinkCard title="Git 基础" description="提交、分支、远端；add / commit / push / pull 的日常流程。" href="/prereq/git/" />
+</CardGrid>
+
+## 建议顺序
+
+读 Lab0 之前：[内存与地址](/prereq/memory/)、[Git 基础](/prereq/git/)。<br /> 读 Lab1 之前：[指针](/prereq/pointer/)、[位运算](/prereq/bits/)、[汇编](/prereq/asm/)、[特权级与异常](/prereq/trap/)。

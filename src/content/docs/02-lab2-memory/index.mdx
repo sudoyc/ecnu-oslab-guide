@@ -1,0 +1,36 @@
+---
+title: "Lab2：内存管理初步"
+description: "这一页目前是提纲。Lab1 做完后展开成完整讲义，并补上 examples 和 exercise。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<p class="page-meta">
+阶段 02 · 对应 lab2 分支 · 提纲
+</p>
+
+这一页目前是提纲。Lab1 做完后展开成完整讲义，并补上 examples 和 exercise。
+
+## 这个 lab 要你做什么
+
+课程框架新增 `src/kernel/mem/`，分两个阶段：
+
+| 阶段 | 文件 | 内容 |
+| --- | --- | --- |
+| 一：物理内存 | `pmem.c` | 把 `end` 之后的物理内存切成 4KB 页，分成内核区和用户区，用空闲链表实现 `pmem_alloc` / `pmem_free`，双核并发分配要加锁 |
+| 二：内核虚拟内存 | `kvm.c` | 建立 RISC-V Sv39 三级页表，把内核代码、数据、设备映射进去，打开 `satp`，让内核跑在分页模式下 |
+
+## 计划讲的内容
+
+1. **物理内存布局**：`kernel.ld` 里的 `end` 符号是什么，为什么内存从它之后才是空的。
+2. **空闲链表**：不用额外数组，直接把空闲页的前 8 字节当 next 指针。练习：在本机用 `malloc` 出的一大块内存实现页分配器。
+3. **并发分配**：用 Lab1 的自旋锁保护链表；为什么 alloc 后要 memset。
+4. **虚拟地址**：为什么需要它（隔离、连续的假象）；地址怎么拆成 VPN\[2\]/VPN\[1\]/VPN\[0\]/offset。
+5. **Sv39 页表**：PTE 的格式和 V/R/W/X/U 标志位；三级查表的过程。练习：在本机模拟页表的 walk 和 map。
+6. **打开分页**：`satp` 的格式，`sfence.vma` 为什么必须有；恒等映射让开启分页那一刻不崩溃。
+
+<Aside type="note" title="现在就能预习的">
+
+课程仓库 `git show origin/lab2:README.md`，以及 xv6 的 `kernel/kalloc.c`（对应阶段一）和 `kernel/vm.c`（对应阶段二）。
+
+</Aside>

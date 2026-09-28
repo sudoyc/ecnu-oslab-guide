@@ -1,0 +1,55 @@
+---
+title: "从零写一个内核"
+description: "每个阶段对应课程的一个 lab。读完讲义、跑完示例、做完练习，你应该能看懂那个 lab 的指导书在要你做什么，以及为什么要这样做。"
+---
+
+import { Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+每个阶段对应课程的一个 lab。读完讲义、跑完示例、做完练习，你应该能看懂那个 lab 的指导书在要你做什么，以及为什么要这样做。
+
+写给零基础的同学：不假设你学过操作系统，C 和 RISC-V 汇编也从需要的地方讲起。这不是课程官方材料，也不是 lab 的答案；练习都在自己电脑上完成，帮你读懂 lab 在要求什么。
+
+<Aside type="note" title="获取代码">
+
+示例和练习要在自己电脑上跑。克隆仓库，或者在每个阶段页面顶部下载该阶段的压缩包：
+
+```sh
+git clone https://github.com/sudoyc/ecnu-oslab-guide.git
+cd ecnu-oslab-guide/01-lab1-boot/exercise/printf && make
+```
+
+需要 Linux 或 macOS（Windows 用 WSL）和 `gcc`。RISC-V 工具链的安装见 [Lab0](/00-lab0-env/) 第 2 节。
+
+</Aside>
+
+<Aside type="note" title="怎么用这套讲义">
+
+1. 先读阶段的 `index.html`，遇到“动手”框就去跑对应的示例。
+2. `examples/` 是看的：跑一下，观察输出，不用改。
+3. `exercise/` 是做的：补完 TODO，`make` 看到全部 PASS 就算过关。
+4. 卡住超过半小时再看仓库里的 `solution/`（网站上不放），看完合上，自己再写一遍。
+5. 最后回到课程仓库，做真正的 lab。练习只帮你理解，不是 lab 的答案。
+
+</Aside>
+
+## 阶段
+
+<CardGrid>
+<LinkCard title="预备知识" description="内存与地址、指针与结构体、位运算、RISC-V 汇编、异常与特权级、Git。主线里的“预备”框会链接到这里，按需查阅。" href="/prereq/" />
+<LinkCard title="00 · Lab0 环境与工具" description="操作系统是什么；编译、链接、ELF；Makefile；Git 分支；QEMU。" href="/00-lab0-env/" />
+<LinkCard title="01 · Lab1 机器启动" description="RISC-V 寄存器与特权级；entry.S → start.c → main；UART 与 printf；中断与自旋锁。" href="/01-lab1-boot/" />
+<LinkCard title="02 · Lab2 内存管理 提纲" description="物理页分配器、空闲链表、页表与内核虚拟内存。Lab1 完成后展开。" href="/02-lab2-memory/" />
+</CardGrid>
+
+## 课程路线
+
+| 阶段 | 实验 |
+| --- | --- |
+| 基础设施 | Lab1 机器启动 · Lab2 内存管理 · Lab3 中断与异常 |
+| 进程系统 | Lab4 第一个用户进程 · Lab5 系统调用与用户虚拟内存 · Lab6 调度与生命周期 |
+| 文件系统 | Lab7 磁盘与缓冲 · Lab8 inode/dentry/path · Lab9 文件管理与整合 |
+| 硬件扩展 | Lab10 移植到 VisionFive 2 开发板 |
+
+两次检查：Lab1–3 一次，Lab1–9 一次。检查内容是 Git 提交记录、每个 lab 的 README 文档、代码能否通过测试。
+
+讲义文字采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hans)，示例与练习代码采用 MIT 许可。发现错误欢迎在 [GitHub](https://github.com/sudoyc/ecnu-oslab-guide/issues) 提 issue。

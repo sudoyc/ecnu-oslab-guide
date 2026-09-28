@@ -1,0 +1,7 @@
+# 旧站点（手写 HTML）的地址，保留外部链接和书签
+/prereq/asm.html /prereq/asm/ 301
+/prereq/bits.html /prereq/bits/ 301
+/prereq/git.html /prereq/git/ 301
+/prereq/memory.html /prereq/memory/ 301
+/prereq/pointer.html /prereq/pointer/ 301
+/prereq/trap.html /prereq/trap/ 301

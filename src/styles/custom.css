@@ -1,18 +1,106 @@
-/* 沿用旧站的墨绿色调；Starlight 的 :root 是深色，[data-theme='light'] 是浅色 */
+/*
+ * 配色：浅色暖灰底、深色中性炭灰底 + 墨绿主色 + 琥珀辅色，只用这两种色相。
+ * Starlight 默认的蓝灰、蓝色 note、紫色 tip 和墨绿不搭，这里统一换掉。
+ * Starlight 的 :root 是深色，[data-theme='light'] 是浅色；它的样式都在 @layer 里，
+ * 这里不加 layer，所以不用拼选择器权重也能覆盖。
+ */
 :root {
-  --sl-color-accent-low: #1f3129;
-  --sl-color-accent: #3c8f76;
-  --sl-color-accent-high: #bfe6d8;
+  --sl-hue-accent: 164;
+  --sl-hue-orange: 38;
+
+  /* 深色：中性炭灰，不带暖调（暖灰暗下来会发棕） */
+  --sl-color-white: #eef0f2;
+  --sl-color-gray-1: #dadde0;
+  --sl-color-gray-2: #bcc1c6;
+  --sl-color-gray-3: #8a9097;
+  --sl-color-gray-4: #4a4f55;
+  --sl-color-gray-5: #2c3034;
+  --sl-color-gray-6: #1e2124;
+  --sl-color-black: #17191b;
+
+  --sl-color-accent-low: hsl(var(--sl-hue-accent), 26%, 16%);
+  --sl-color-accent: hsl(var(--sl-hue-accent), 46%, 57%);
+  --sl-color-accent-high: hsl(var(--sl-hue-accent), 55%, 80%);
+
+  /* 琥珀色在深色下只用于色条和标题，不做底色 */
+  --sl-color-orange-low: var(--sl-color-gray-6);
+  --sl-color-orange: hsl(var(--sl-hue-orange), 68%, 60%);
+  --sl-color-orange-high: hsl(var(--sl-hue-orange), 75%, 78%);
+
+  --sl-color-bg-inline-code: #24272b;
+
   --sl-font: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --sl-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 :root[data-theme='light'] {
-  --sl-color-accent-low: #d8eee6;
-  --sl-color-accent: #2f6f5e;
-  --sl-color-accent-high: #1a4034;
+  --sl-color-white: hsl(30, 10%, 12%);
+  --sl-color-gray-1: hsl(30, 8%, 18%);
+  --sl-color-gray-2: hsl(30, 6%, 26%);
+  --sl-color-gray-3: hsl(30, 5%, 40%);
+  --sl-color-gray-4: hsl(30, 5%, 58%);
+  --sl-color-gray-5: hsl(35, 10%, 82%);
+  --sl-color-gray-6: hsl(38, 22%, 93%);
+  --sl-color-gray-7: hsl(40, 28%, 96.5%);
+  --sl-color-black: hsl(40, 33%, 99%);
+
+  --sl-color-accent-low: hsl(var(--sl-hue-accent), 35%, 92%);
+  --sl-color-accent: hsl(var(--sl-hue-accent), 55%, 30%);
+  --sl-color-accent-high: hsl(var(--sl-hue-accent), 60%, 20%);
+
+  --sl-color-orange-low: hsl(var(--sl-hue-orange), 70%, 92%);
+  --sl-color-orange: hsl(var(--sl-hue-orange), 70%, 48%);
+  --sl-color-orange-high: hsl(var(--sl-hue-orange), 70%, 26%);
+
+  --sl-color-bg-inline-code: hsl(38, 20%, 92%);
 }
 
 .sl-markdown-content { line-height: 1.8; }
+
+/* 行内代码：浅底 + 细边，比纯色块轻 */
+.sl-markdown-content :not(pre) > code {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.25rem;
+  padding: 0.05em 0.35em;
+}
+
+/* 侧栏当前页：浅色底 + 左侧色条，不再是整块实心 */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  color: var(--sl-color-text-accent);
+  background-color: color-mix(in oklab, var(--sl-color-accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--sl-color-accent);
+}
+.sidebar-content .sl-badge,
+.sidebar-content a[aria-current='page'] > .sl-badge {
+  color: var(--sl-color-gray-3);
+  background: transparent;
+  border-color: var(--sl-color-gray-5);
+}
+
+/* 提示框：note / 预备 走主色，tip / 动手 / 练习 走琥珀色，底色只染一点 */
+.starlight-aside {
+  border-radius: 0 0.5rem 0.5rem 0;
+  color: var(--sl-color-gray-1);
+}
+.starlight-aside--note {
+  --sl-color-asides-text-accent: var(--sl-color-accent-high);
+  --sl-color-asides-border: var(--sl-color-accent);
+  background-color: color-mix(in oklab, var(--sl-color-accent) 9%, var(--sl-color-bg));
+}
+.starlight-aside--tip {
+  --sl-color-asides-text-accent: var(--sl-color-orange-high);
+  --sl-color-asides-border: var(--sl-color-orange);
+  background-color: color-mix(in oklab, var(--sl-color-orange) 10%, var(--sl-color-bg));
+}
+
+/* 深色下提示框底色压得更淡，琥珀框几乎是中性灰，避免出现棕色块 */
+:root:not([data-theme='light']) .starlight-aside--note {
+  background-color: color-mix(in oklab, var(--sl-color-accent) 7%, var(--sl-color-bg));
+}
+:root:not([data-theme='light']) .starlight-aside--tip {
+  background-color: color-mix(in oklab, var(--sl-color-orange) 4%, var(--sl-color-bg));
+}
 
 /* 页面顶部的“对应 lab / 下载代码”一行 */
 .page-meta {
@@ -22,10 +110,16 @@
   padding-bottom: 0.6rem;
 }
 
+/* 表格表头 */
+.sl-markdown-content th {
+  color: var(--sl-color-gray-2);
+  border-bottom: 2px solid var(--sl-color-gray-5);
+}
+
 /* 手画的示意图：颜色跟随主题 */
 svg.fig { width: 100%; height: auto; display: block; margin: 1.5rem 0; }
 svg.fig text { fill: var(--sl-color-white); font-size: 13px; font-family: var(--sl-font); }
-svg.fig .stroke { stroke: var(--sl-color-gray-3); fill: none; }
+svg.fig .stroke { stroke: var(--sl-color-gray-4); fill: none; }
 svg.fig .muted { fill: var(--sl-color-gray-3); }
 svg.fig .fill-a { fill: var(--sl-color-accent-low); stroke: var(--sl-color-accent); }
 svg.fig .fill-w { fill: var(--sl-color-orange-low); stroke: var(--sl-color-orange); }
@@ -37,3 +131,4 @@ svg.fig .fill-w { fill: var(--sl-color-orange-low); stroke: var(--sl-color-orang
   padding: 0.5rem 1rem;
 }
 .sl-markdown-content details > summary { cursor: pointer; font-weight: 600; }
+.sl-markdown-content details[open] > summary { color: var(--sl-color-text-accent); }
